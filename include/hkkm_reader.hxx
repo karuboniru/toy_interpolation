@@ -2,11 +2,11 @@
 #include <TH2D.h>
 
 #include <array>
-#include <string_view>
+#include <string>
 
 class HKKM_READER_2D {
 public:
-  HKKM_READER_2D(std::string_view);
+  HKKM_READER_2D(const std::string & );
   HKKM_READER_2D(const HKKM_READER_2D &) = default;
   HKKM_READER_2D(HKKM_READER_2D &&) = default;
   HKKM_READER_2D &operator=(const HKKM_READER_2D &) = default;

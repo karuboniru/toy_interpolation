@@ -1,6 +1,5 @@
 #include "hkkm_reader.hxx"
 #include "interpolation.hxx"
-#include <algorithm>
 #include <boost/program_options.hpp>
 #include <cmath>
 #include <print>

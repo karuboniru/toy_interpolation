@@ -29,16 +29,16 @@ TH2D create_hist_model() {
           n_costh_bins, cos_theta_min, cos_theta_max};
 }
 
-std::array<TH2D, 4> read_honda_flux(std::string_view path) {
+std::array<TH2D, 4> read_honda_flux(const std::string &path) {
   std::array<TH2D, 4> hists{create_hist_model(), create_hist_model(),
                             create_hist_model(), create_hist_model()};
   auto &[numu, numubar, nue, nuebar] = hists;
-  std::ifstream file(path.data());
+  std::ifstream file(path);
   if (!file) {
     throw std::runtime_error("Failed to open file");
   }
 
-  double costh{}, phi{};
+  double costh{};
   for (std::string line{}; std::getline(file, line);) {
     if (line[0] == 'a') {
       // we are at sth like
@@ -49,7 +49,6 @@ std::array<TH2D, 4> read_honda_flux(std::string_view path) {
                   "average flux in [cosZ = %lf -- %lf, phi_Az = %lf -- %lf]",
                   &cosz_low, &cosz_high, &phi_low, &phi_high);
       costh = (cosz_low + cosz_high) / 2;
-      phi = (phi_low + phi_high) / 2 / 180 * TMath::Pi();
       continue;
     }
     if (line[1] == 'E') {
@@ -71,7 +70,8 @@ std::array<TH2D, 4> read_honda_flux(std::string_view path) {
 
 } // namespace
 
-HKKM_READER_2D::HKKM_READER_2D(std::string_view path) : hists(read_honda_flux(path)) {}
+HKKM_READER_2D::HKKM_READER_2D(const std::string &path)
+    : hists(read_honda_flux(path)) {}
 
 size_t HKKM_READER_2D::pdg_index(int pdg) {
   switch (pdg) {

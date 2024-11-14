@@ -32,7 +32,7 @@ int main(int argc, char **argv) {
     std::cerr << desc << '\n';
     return 1;
   }
-  if (vm.count("help")) {
+  if (vm.contains("help")) {
     std::cout << desc << '\n';
     return 1;
   }

@@ -2,11 +2,11 @@
 #include <TH3D.h>
 
 #include <array>
-#include <string_view>
+#include <string>
 
 class HKKM_READER_3D {
 public:
-  HKKM_READER_3D(std::string_view);
+  HKKM_READER_3D(const std::string &);
   HKKM_READER_3D(const HKKM_READER_3D &) = default;
   HKKM_READER_3D(HKKM_READER_3D &&) = default;
   HKKM_READER_3D &operator=(const HKKM_READER_3D &) = default;

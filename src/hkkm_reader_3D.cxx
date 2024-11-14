@@ -29,19 +29,18 @@ constexpr double d_logE = (logE_max - logE_min) / (n_logE_points - 1);
 TH3D create_hist_model() {
   return {"", "",
           // points from HKKM is in the middle of the bin
-          n_logE_points, logE_min - d_logE / 2., logE_max + d_logE / 2.,
+          n_logE_points, logE_min - (d_logE / 2.), logE_max + (d_logE / 2.),
           // same binning as HKKM for costh
           n_costh_bins, cos_theta_min, cos_theta_max,
           // and phi
           n_phi_bins, phi_min, phi_max};
 }
 
-
-std::array<TH3D, 4> read_honda_flux(std::string_view path) {
+std::array<TH3D, 4> read_honda_flux(const std::string &path) {
   std::array<TH3D, 4> hists{create_hist_model(), create_hist_model(),
                             create_hist_model(), create_hist_model()};
   auto &[numu, numubar, nue, nuebar] = hists;
-  std::ifstream file(path.data());
+  std::ifstream file{path};
   if (!file) {
     throw std::runtime_error("Failed to open file");
   }
@@ -78,10 +77,9 @@ std::array<TH3D, 4> read_honda_flux(std::string_view path) {
   return hists;
 }
 
-
 } // namespace
 
-HKKM_READER_3D::HKKM_READER_3D(std::string_view path)
+HKKM_READER_3D::HKKM_READER_3D(const std::string &path)
     : hists(read_honda_flux(path)) {}
 
 size_t HKKM_READER_3D::pdg_index(int pdg) {

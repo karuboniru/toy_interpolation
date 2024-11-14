@@ -3,7 +3,6 @@
 #include <cstddef>
 #include <numeric>
 #include <print>
-#include <ranges>
 #include <vector>
 
 #include <Eigen/Dense>
