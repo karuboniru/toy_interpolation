@@ -1,11 +1,11 @@
 #include "hkkm_reader_3D.hxx"
 #include "interpolation.hxx"
+#include <TAttLine.h>
 #include <algorithm>
 #include <boost/program_options.hpp>
 #include <cmath>
 #include <print>
 
-#include <TApplication.h>
 #include <TCanvas.h>
 #include <TF1.h>
 #include <TF2.h>
@@ -14,12 +14,32 @@
 int main(int argc, char **argv) {
   namespace po = boost::program_options;
   po::options_description desc("Allowed options");
-  desc.add_options()("help", "produce help message")(
-      "input-file", po::value<std::string>()->required(), "input file");
+  desc.add_options()("help", "produce help message")                       //
+      ("input-file,i", po::value<std::string>()->required(), "input file") //
+      ("fix-E,e", po::value<double>()->default_value(1.6), "fixed energy") //
+      ("fix-costh,c", po::value<double>()->default_value(0.85),
+       "fixed costh") //
+      ("fix-phi,p", po::value<double>()->default_value(1.0),
+       "fixed phi") //
+      ("output,o", po::value<std::string>()->default_value(""),
+       "Prefix For output plots");
   po::variables_map vm;
-  po::store(po::parse_command_line(argc, argv, desc), vm);
-  po::notify(vm);
+  try {
+    po::store(po::parse_command_line(argc, argv, desc), vm);
+    po::notify(vm);
+  } catch (const std::exception &e) {
+    std::cerr << e.what() << '\n';
+    std::cerr << desc << '\n';
+    return 1;
+  }
+  if (vm.count("help")) {
+    std::cout << desc << '\n';
+    return 1;
+  }
   auto input_file = vm["input-file"].as<std::string>();
+  const double fixed_costh = vm["fix-costh"].as<double>();
+  const double fixed_energy = vm["fix-E"].as<double>();
+  const double fixed_phi = vm["fix-phi"].as<double>();
 
   HKKM_READER_3D reader(input_file);
   auto &numu = reader[14];
@@ -35,7 +55,7 @@ int main(int argc, char **argv) {
   axis_object phi_points{
       .min = 0, .max = 2 * TMath::Pi(), .n_points = n_phi_points};
 
-  interpolate<2, 4, 4> interp{{logE_points, costh_points, phi_points}};
+  interpolate<3, 4, 4> interp{{logE_points, costh_points, phi_points}};
   for (size_t i = 0; i < n_logE_points; ++i) {
     interp[{i, 0, 0}] = 0;
     for (size_t j = 0; j < n_costh_bins; ++j) {
@@ -59,21 +79,17 @@ int main(int argc, char **argv) {
   };
   auto get_flux_no_interop = [&](double E, double costh, double phi) {
     auto logE = std::log10(E);
-    // return numu.Interpolate(logE, costh, phi);
     auto binx = numu.GetXaxis()->FindBin(logE);
     auto biny = numu.GetYaxis()->FindBin(costh);
     auto binz = numu.GetZaxis()->FindBin(phi);
     return numu.GetBinContent(binx, biny, binz);
   };
 
-  TApplication app("app", nullptr, nullptr);
-  TCanvas c1("c1", "c1", 800 * 3, 600);
+  // TApplication app("app", nullptr, nullptr);
+  constexpr int res_factor = 1;
+  TCanvas c1("c1", "c1", 800 * 3 * res_factor, 600 * res_factor);
   c1.Divide(3, 1);
   c1.cd(1);
-
-  constexpr double fixed_costh = 0.85;
-  constexpr double fixed_energy = 1.2;
-  constexpr double fixed_phi = 1.2 * M_PI;
 
   TF1 flux_given_costh{
       "flux",
@@ -82,20 +98,22 @@ int main(int argc, char **argv) {
       },
       -1, 4, 0};
   flux_given_costh.SetTitle(
-      std::format(
-          "Flux along cos#theta = {:.1f}, #phi = {:.1f}; log_{{10}}(E/GeV); ",
-          fixed_costh, fixed_phi)
+      std::format("Flux along cos #theta = {:.1f},  #phi = {:.1f}; "
+                  "log_{{10}}(E/GeV); ln (#Phi/(m^{{2}} sec sr GeV) ",
+                  fixed_costh, fixed_phi)
           .c_str());
-  flux_given_costh.SetNpx(1000);
+  // flux_given_costh.SetNpx(1000);
   const double costh_thres = 1.0;
-  TF1 flux_given_E{
-      "flux", [&](double *x, double *) { return get_flux(1, x[0], fixed_phi); },
-      -costh_thres, costh_thres, 0};
-  flux_given_E.SetNpx(1000);
-  flux_given_E.SetTitle(
-      std::format("Flux along E = {} GeV, #phi = {:.1f}; cos#theta",
-                  fixed_energy, fixed_phi)
-          .c_str());
+  TF1 flux_given_E{"flux",
+                   [&](double *x, double *) {
+                     return get_flux(fixed_energy, x[0], fixed_phi);
+                   },
+                   -costh_thres, costh_thres, 0};
+  // flux_given_E.SetNpx(1000);
+  flux_given_E.SetTitle(std::format("Flux along E = {} GeV,  #phi = {:.1f}; "
+                                    "cos #theta; #Phi (m^{{2}} sec sr GeV)",
+                                    fixed_energy, fixed_phi)
+                            .c_str());
 
   TF1 flux_given_costh_no_interop{
       "flux",
@@ -104,61 +122,70 @@ int main(int argc, char **argv) {
             get_flux_no_interop(std::pow(10, x[0]), fixed_costh, fixed_phi));
       },
       -1, 4, 0};
-  flux_given_costh_no_interop.SetNpx(1000);
+  // flux_given_costh_no_interop.SetNpx(1000);
   TF1 flux_given_E_no_interop{"flux",
                               [&](double *x, double *) {
-                                return get_flux_no_interop(1, x[0], fixed_phi);
+                                return get_flux_no_interop(fixed_energy, x[0],
+                                                           fixed_phi);
                               },
                               -costh_thres, costh_thres, 0};
-  flux_given_E_no_interop.SetNpx(1000);
+  // flux_given_E_no_interop.SetNpx(1000);
 
   TF1 flux_given_E_costh{"flux",
                          [&](double *x, double *) {
-                           return std::log(get_flux(1, fixed_costh, x[0]));
+                           //  return std::log(
+                           return get_flux(fixed_energy, fixed_costh, x[0]);
                          },
                          0, 2 * M_PI, 0};
-  flux_given_E_costh.SetNpx(1000);
+  // flux_given_E_costh.SetNpx(1000);
   flux_given_E_costh.SetTitle(
-      std::format("Flux along E = 1 GeV, cos#theta = {:.1f}; phi", fixed_costh)
+      std::format("Flux along E = {} GeV, cos  #theta = "
+                  "{:.1f}; #phi; #Phi (m^{{2}} sec sr GeV)",
+                  fixed_energy, fixed_costh)
           .c_str());
-  TF1 flux_given_E_costh_no_interop{
-      "flux",
-      [&](double *x, double *) {
-        return std::log(get_flux_no_interop(1, fixed_costh, x[0]));
-      },
-      0, 2 * M_PI, 0};
-  flux_given_E_costh_no_interop.SetNpx(1000);
+  TF1 flux_given_E_costh_no_interop{"flux",
+                                    [&](double *x, double *) {
+                                      return get_flux_no_interop(
+                                          fixed_energy, fixed_costh, x[0]);
+                                    },
+                                    0, 2 * M_PI, 0};
+  // flux_given_E_costh_no_interop.SetNpx(1000);
 
-  flux_given_costh.SetMaximum(std::max(
-      flux_given_costh.GetMaximum(), flux_given_costh_no_interop.GetMaximum()));
-  flux_given_costh.Draw();
-  flux_given_costh_no_interop.SetLineColor(kBlue);
-  flux_given_costh_no_interop.SetLineStyle(kDashed);
-  flux_given_costh_no_interop.SetLineWidth(4);
-  flux_given_costh_no_interop.Draw("same");
+  auto do_plot = [&](int id, TF1 &f, TF1 &f_no_interop) {
+    f.SetNpx(500);
+    f_no_interop.SetNpx(1000);
+    auto xmin = f.GetXmin();
+    auto xmax = f.GetXmax();
+    xmin = xmin + 0.01 * (xmax - xmin);
+    xmax = xmax - 0.01 * (xmax - xmin);
 
-  c1.cd(2);
-  // flux_given_E.SetMinimum(0);
-  flux_given_E.SetMaximum(1.1 * std::max(flux_given_E.GetMaximum(),
-                                         flux_given_E_no_interop.GetMaximum()));
-  flux_given_E.Draw();
-  flux_given_E_no_interop.SetLineColor(kBlue);
-  flux_given_E_no_interop.SetLineStyle(kDashed);
-  flux_given_E_no_interop.SetLineWidth(4);
-  flux_given_E_no_interop.Draw("same");
+    auto min =
+        std::min(f.GetMinimum(xmin, xmax), f_no_interop.GetMinimum(xmin, xmax));
+    auto max =
+        std::max(f.GetMaximum(xmin, xmax), f_no_interop.GetMaximum(xmin, xmax));
+    min = min - 0.1 * std::abs(max - min);
+    max = max + 0.1 * std::abs(max - min);
 
-  c1.cd(3);
-  // flux_given_E_costh.SetMinimum(0);
-  // flux_given_E_costh.SetMaximum(1.1 * std::max(
-  //     flux_given_E_costh.GetMaximum(),
-  //     flux_given_E_costh_no_interop.GetMaximum()));
-  flux_given_E_costh.Draw();
-  flux_given_E_costh_no_interop.SetLineColor(kBlue);
-  flux_given_E_costh_no_interop.SetLineStyle(kDashed);
-  flux_given_E_costh_no_interop.SetLineWidth(4);
-  flux_given_E_costh_no_interop.Draw("same");
+    f.SetMinimum(min);
+    f.SetMaximum(max);
+    c1.cd(id);
+    f.Draw();
+    f_no_interop.SetLineColor(kBlue);
+    f_no_interop.SetLineStyle(kDotted);
+    f_no_interop.SetLineWidth(3);
+    f_no_interop.Draw("same");
+  };
+
+  do_plot(1, flux_given_costh, flux_given_costh_no_interop);
+  do_plot(2, flux_given_E, flux_given_E_no_interop);
+  do_plot(3, flux_given_E_costh, flux_given_E_costh_no_interop);
 
   c1.Draw();
-
-  app.Run();
+  auto output_str = vm["output"].as<std::string>();
+  if (output_str.size()) {
+    c1.SaveAs(std::format("{}_flux.svg", output_str).c_str());
+    c1.SaveAs(std::format("{}_flux.pdf", output_str).c_str());
+    c1.SaveAs(std::format("{}_flux.eps", output_str).c_str());
+  }
+  // app.Run();
 }

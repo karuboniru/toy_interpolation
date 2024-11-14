@@ -64,14 +64,14 @@ int main(int argc, char **argv) {
                        },
                        -1, 4, 0};
   flux_given_costh.SetTitle(
-      std::format("Flux along cos#theta = {:.1f}; log_{{10}}(E/GeV); ",
+      std::format("Flux along cos#theta = {:.1f}; log_{{10}}(E/GeV); ln (#Phi/(m^{{2}} sec sr GeV)) ",
                   fixed_costh)
           .c_str());
   flux_given_costh.SetNpx(1000);
   TF1 flux_given_E{
       "flux", [&](double *x, double *) { return get_flux(1, x[0]); }, -1, 1, 0};
   flux_given_E.SetNpx(1000);
-  flux_given_E.SetTitle("Flux along E = 1 GeV; cos#theta");
+  flux_given_E.SetTitle("Flux along E = 1 GeV; cos#theta; #Phi (m^{{2}} sec sr GeV)");
   TF1 flux_given_costh_no_interop{
       "flux",
       [&](double *x, double *) {
@@ -87,14 +87,14 @@ int main(int argc, char **argv) {
   flux_given_costh.Draw();
   flux_given_costh_no_interop.SetLineColor(kBlue);
   flux_given_costh_no_interop.SetLineStyle(kDashed);
-  flux_given_costh_no_interop.SetLineWidth(4);
+  flux_given_costh_no_interop.SetLineWidth(2);
   flux_given_costh_no_interop.Draw("same");
   c1.cd(2);
   // flux_given_E.SetMinimum(0);
   flux_given_E.Draw();
   flux_given_E_no_interop.SetLineColor(kBlue);
   flux_given_E_no_interop.SetLineStyle(kDashed);
-  flux_given_E_no_interop.SetLineWidth(4);
+  flux_given_E_no_interop.SetLineWidth(2);
   flux_given_E_no_interop.Draw("same");
   c1.Draw();
 

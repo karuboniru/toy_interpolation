@@ -50,7 +50,7 @@ int main() {
     orig_func.Draw();
     func.SetLineColor(kBlue);
     func.SetLineStyle(kDashed);
-    func.SetLineWidth(4);
+    func.SetLineWidth(2);
     func.Draw("same");
     c1.cd(2);
     TF1 orig_func_derivative_x{
@@ -67,7 +67,7 @@ int main() {
     orig_func_derivative_x.Draw();
     func_derivative_x.SetLineColor(kBlue);
     func_derivative_x.SetLineStyle(kDashed);
-    func_derivative_x.SetLineWidth(4);
+    func_derivative_x.SetLineWidth(2);
     func_derivative_x.Draw("same");
     c1.cd(0);
     c1.Update();

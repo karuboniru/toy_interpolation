@@ -127,7 +127,7 @@ private:
         (axes[dimension_index].n_points - 1);
     auto closest_indices = get_closest_indices<order>(
         normalized_coordinates, axes[dimension_index].n_points);
-    // notice this index is defined in [-1, 1]
+    // notice this value is defined in [-1, 1]
     auto normalized_value =
         -1 + (2 * (normalized_coordinates - closest_indices[0]) /
               (closest_indices[order - 1] - closest_indices[0]));
