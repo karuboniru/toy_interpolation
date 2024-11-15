@@ -13,18 +13,23 @@ struct axis_object {
   size_t n_points{};
 };
 
-// linear basis for interpolation
-[[gnu::const]]
-constexpr double basis_function(size_t i, double x) {
-  return std::pow(x, i);
-}
-// and its derivative
-[[gnu::const]]
-constexpr double basis_function_derivative(size_t i, double x) {
-  if (i == 0) {
-    return 0;
+template <size_t power> [[gnu::const]] constexpr double pow(double base) {
+  if constexpr (power == 0) {
+    return 1;
   }
-  return i * std::pow(x, i - 1);
+  if constexpr (power % 2 == 0) {
+    double half_power = pow<power / 2>(base);
+    return half_power * half_power;
+  } else
+    return base * pow<power - 1>(base);
+}
+
+template <size_t power>
+[[gnu::const]] constexpr double pow_derivative(double base) {
+  if constexpr (power == 0) {
+    return 0;
+  } else
+    return power * pow<power - 1>(base);
 }
 
 template <size_t order> struct coeff_matrix {
@@ -37,11 +42,12 @@ template <size_t order>
 const Eigen::Matrix<double, order, order> coeff_matrix<order>::value = []() {
   Eigen::Matrix<double, order, order> ret;
   for (size_t grid_index = 0; grid_index < order; ++grid_index) {
-    for (size_t polynomial_index = 0; polynomial_index < order;
-         ++polynomial_index) {
-      ret(grid_index, polynomial_index) = basis_function(
-          polynomial_index, -1.0 + (2.0 * grid_index / (order - 1)));
-    }
+    [&]<size_t... polynomial_index>(std::index_sequence<polynomial_index...>) {
+      (..., [&] {
+        ret(grid_index, polynomial_index) =
+            pow<polynomial_index>(-1.0 + (2.0 * grid_index / (order - 1)));
+      }());
+    }(std::make_integer_sequence<size_t, order>{});
   }
   return ret.inverse().eval();
 }();
@@ -64,36 +70,28 @@ public:
         }(axes_)) {}
 
   interpolate(const interpolate &) = default;
-  interpolate(interpolate &&) = delete;
-  interpolate &operator=(const interpolate &) = delete;
-  interpolate &operator=(interpolate &&) = delete;
+  interpolate(interpolate &&) = default;
+  interpolate &operator=(const interpolate &) = default;
+  interpolate &operator=(interpolate &&) = default;
   ~interpolate() = default;
 
   auto &operator[](const std::array<size_t, dimension> &index_array) {
-    auto to_flat_index =
-        [this](const std::array<size_t, dimension> &index_array) {
-          size_t flat_index = 0;
-          for (size_t i = 0; i < dimension; ++i) {
-            flat_index *= axes[i].n_points;
-            flat_index += index_array[i];
-          }
-          return flat_index;
-        };
-    return values[to_flat_index(index_array)];
+    size_t flat_index = 0;
+    for (size_t i = 0; i < dimension; ++i) {
+      flat_index *= axes[i].n_points;
+      flat_index += index_array[i];
+    }
+    return values[flat_index];
   }
 
   const auto &
   operator[](const std::array<size_t, dimension> &index_array) const {
-    auto to_flat_index =
-        [this](const std::array<size_t, dimension> &index_array) {
-          size_t flat_index = 0;
-          for (size_t i = 0; i < dimension; ++i) {
-            flat_index *= axes[i].n_points;
-            flat_index += index_array[i];
-          }
-          return flat_index;
-        };
-    return values[to_flat_index(index_array)];
+    size_t flat_index = 0;
+    for (size_t i = 0; i < dimension; ++i) {
+      flat_index *= axes[i].n_points;
+      flat_index += index_array[i];
+    }
+    return values[flat_index];
   }
 
   double do_interpolation(
@@ -168,13 +166,15 @@ private:
       }
     }
     Eigen::Matrix<double, 1, order> interpolation_coeffs;
-    for (size_t i = 0; i < order; ++i) {
-      if (do_derivative) {
-        interpolation_coeffs(0, i) = basis_function_derivative(i, value);
-      } else {
-        interpolation_coeffs(0, i) = basis_function(i, value);
-      }
-    }
+    [&]<size_t... indices>(std::index_sequence<indices...>) {
+      (..., [&] {
+        if (do_derivative) {
+          interpolation_coeffs(0, indices) = pow_derivative<indices>(value);
+        } else {
+          interpolation_coeffs(0, indices) = pow<indices>(value);
+        }
+      }());
+    }(std::make_integer_sequence<size_t, order>{});
     return interpolation_coeffs * coeff_matrix<order>::value * sub_grid_values;
   }
 
