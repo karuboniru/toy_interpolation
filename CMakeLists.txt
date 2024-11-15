@@ -22,8 +22,10 @@ target_include_directories(toy_interpolation_objects PUBLIC ${CMAKE_SOURCE_DIR}/
 add_executable(interpolation interpolation.cxx)
 add_executable(honda_flux_handling honda_flux_handling.cxx)
 add_executable(honda_flux_handling3D honda_flux_handling3D.cxx)
+add_executable(honda_flux_handling3D_spline honda_flux_handling3D_spline.cxx)
 
 # Link libraries
 target_link_libraries(interpolation PRIVATE ROOT::Core ROOT::Hist ROOT::Gpad Eigen3::Eigen)
 target_link_libraries(honda_flux_handling PRIVATE Boost::program_options toy_interpolation_objects ROOT::Core ROOT::Hist ROOT::Gpad Eigen3::Eigen)
 target_link_libraries(honda_flux_handling3D PRIVATE Boost::program_options toy_interpolation_objects ROOT::Core ROOT::Hist ROOT::Gpad Eigen3::Eigen)
+target_link_libraries(honda_flux_handling3D_spline PRIVATE Boost::program_options toy_interpolation_objects ROOT::Core ROOT::Hist ROOT::Gpad Eigen3::Eigen)
