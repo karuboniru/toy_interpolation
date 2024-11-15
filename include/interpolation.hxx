@@ -4,7 +4,6 @@
 #include <numeric>
 #include <vector>
 
-
 #include <Eigen/Dense>
 
 struct axis_object {
@@ -156,28 +155,6 @@ private:
           -1 + (2 * (normalized_coordinates - closest_indices[0]) /
                 (closest_indices[order - 1] - closest_indices[0]));
     else {
-      // auto pos_of_0 =
-      //     std::find(closest_indices.begin(), closest_indices.end(), 0);
-      // if (pos_of_0 == closest_indices.end() ||
-      //     pos_of_0 == closest_indices.begin()) { // did not across boundary
-      //   normalized_value =
-      //       -1 + (2 * (normalized_coordinates - closest_indices[0]) /
-      //             (closest_indices[order - 1] - closest_indices[0]));
-      // } else {
-      //   auto coord_of_0 =
-      //       -1 + ((double)(std::distance(closest_indices.begin(), pos_of_0))
-      //       /
-      //             (order - 1) * 2.0);
-      //   bool normalized_coordinates_pass_center =
-      //       normalized_coordinates > (axes[dimension_index].n_points - 1)
-      //       / 2.;
-      //   auto rel_coord_of_0 = normalized_coordinates_pass_center
-      //                             ? (axes[dimension_index].n_points - 1)
-      //                             : 0;
-      //   normalized_value =
-      //       coord_of_0 +
-      //       (normalized_coordinates - rel_coord_of_0) * 2. / (order - 1);
-      // }
       auto center_in_big_coord = order % 2 == 0 ? 0.5 : 1;
       auto shift_in_big_coord = normalized_coordinates - center_in_big_coord;
       shift_in_big_coord -= std::round(shift_in_big_coord);
