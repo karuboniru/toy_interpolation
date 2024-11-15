@@ -3,6 +3,7 @@
 #include <TApplication.h>
 #include <TCanvas.h>
 #include <TF1.h>
+#include <print>
 
 int main() {
   axis_object x_points{.min = 0.0, .max = 1.0, .n_points = 11};

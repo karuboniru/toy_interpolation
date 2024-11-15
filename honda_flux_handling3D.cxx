@@ -20,7 +20,8 @@ int main(int argc, char **argv) {
       ("fix-costh,c", po::value<double>()->default_value(0.85),
        "fixed costh") //
       ("fix-phi,p", po::value<double>()->default_value(1.0),
-       "fixed phi") //
+       "fixed phi")                              //
+      ("periodic", "Use periodic interpolation") //
       ("output,o", po::value<std::string>()->default_value(""),
        "Prefix For output plots");
   po::variables_map vm;
@@ -40,6 +41,7 @@ int main(int argc, char **argv) {
   const double fixed_costh = vm["fix-costh"].as<double>();
   const double fixed_energy = vm["fix-E"].as<double>();
   const double fixed_phi = vm["fix-phi"].as<double>();
+  bool periodic = vm.contains("periodic");
 
   HKKM_READER_3D reader(input_file);
   auto &numu = reader[14];
@@ -55,7 +57,7 @@ int main(int argc, char **argv) {
   axis_object phi_points{
       .min = 0, .max = 2 * TMath::Pi(), .n_points = n_phi_points};
 
-  interpolate<3, 4, 4> interp{{logE_points, costh_points, phi_points}};
+  interpolate<3, 4, 4> interp({logE_points, costh_points, phi_points});
   for (size_t i = 0; i < n_logE_points; ++i) {
     interp[{i, 0, 0}] = 0;
     for (size_t j = 0; j < n_costh_bins; ++j) {
@@ -75,16 +77,28 @@ int main(int argc, char **argv) {
   // then plot
   auto get_flux = [&](double E, double costh, double phi) {
     auto logE = std::log10(E);
-    return interp.do_interpolation({logE, costh, phi}, {false, true, true});
+    return interp.do_interpolation({logE, costh, phi}, {false, true, true},
+                                   {false, false, periodic});
   };
   auto get_flux_no_interop = [&](double E, double costh, double phi) {
     auto logE = std::log10(E);
+    auto root_result = numu.Interpolate(logE, costh, phi);
+    if (root_result) {
+      return root_result;
+    }
     auto binx = numu.GetXaxis()->FindBin(logE);
     auto biny = numu.GetYaxis()->FindBin(costh);
     auto binz = numu.GetZaxis()->FindBin(phi);
     return numu.GetBinContent(binx, biny, binz);
   };
 
+  // double interpolated = get_flux(fixed_energy, fixed_costh, fixed_phi);
+  // double non_interpolated =
+  //     get_flux_no_interop(fixed_energy, fixed_costh, fixed_phi);
+  // std::println("Interpolated: {}, Non-interpolated: {}, RelErr: {}",
+  //              interpolated, non_interpolated,
+  //              std::abs(interpolated - non_interpolated) / non_interpolated);
+  // return 0;
   // TApplication app("app", nullptr, nullptr);
   constexpr int res_factor = 1;
   TCanvas c1("c1", "c1", 800 * 3 * res_factor, 600 * res_factor);
@@ -140,7 +154,7 @@ int main(int argc, char **argv) {
   // flux_given_E_costh.SetNpx(1000);
   flux_given_E_costh.SetTitle(
       std::format("Flux along E = {} GeV, cos  #theta = "
-                  "{:.1f}; #phi; #Phi (m^{{2}} sec sr GeV)",
+                  "{:.2f}; #phi; #Phi (m^{{2}} sec sr GeV)",
                   fixed_energy, fixed_costh)
           .c_str());
   TF1 flux_given_E_costh_no_interop{"flux",
@@ -152,7 +166,7 @@ int main(int argc, char **argv) {
   // flux_given_E_costh_no_interop.SetNpx(1000);
 
   auto do_plot = [&](int id, TF1 &f, TF1 &f_no_interop) {
-    f.SetNpx(500);
+    f.SetNpx(1000);
     f_no_interop.SetNpx(1000);
     auto xmin = f.GetXmin();
     auto xmax = f.GetXmax();

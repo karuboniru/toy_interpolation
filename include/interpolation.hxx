@@ -2,8 +2,8 @@
 #include <cmath>
 #include <cstddef>
 #include <numeric>
-#include <print>
 #include <vector>
+
 
 #include <Eigen/Dense>
 
@@ -94,10 +94,11 @@ public:
     return values[flat_index];
   }
 
-  double do_interpolation(
-      const std::array<double, dimension> &coordinates,
-      const std::array<bool, dimension> &do_derivative = {}) const {
-    auto grid = build_grid(coordinates, do_derivative);
+  double
+  do_interpolation(const std::array<double, dimension> &coordinates,
+                   const std::array<bool, dimension> &do_derivative = {},
+                   const std::array<bool, dimension> &do_periodic = {}) const {
+    auto grid = build_grid(coordinates, do_derivative, do_periodic);
     auto value = do_interpolation_from_grid(grid);
     for (size_t i = 0; i < dimension; ++i) {
       if (do_derivative[i]) {
@@ -112,9 +113,25 @@ private:
   std::array<axis_object, dimension> axes;
   std::vector<double> values;
 
+  template <typename T, size_t order>
+  void static add_grid(
+      std::tuple<std::array<T, order>, bool, double> &grid1,
+      const std::tuple<std::array<T, order>, bool, double> &grid2) {
+    if constexpr (std::is_same_v<T, double>) {
+      for (size_t i = 0; i < order; ++i) {
+        std::get<0>(grid1)[i] += std::get<0>(grid2)[i];
+      }
+    } else {
+      for (size_t i = 0; i < order; ++i) {
+        add_grid(std::get<0>(grid1)[i], std::get<0>(grid2)[i]);
+      }
+    }
+  }
+
   template <size_t dimension_index = 0>
   auto build_grid(const std::array<double, dimension> &coordinates,
                   const std::array<bool, dimension> &do_derivative,
+                  const std::array<bool, dimension> &do_periodic,
                   const std::array<size_t, dimension_index> &index =
                       std::array<size_t, 0>{}) const {
     constexpr size_t order = orders_array[dimension_index];
@@ -122,32 +139,91 @@ private:
         (coordinates[dimension_index] - axes[dimension_index].min) /
         (axes[dimension_index].max - axes[dimension_index].min) *
         (axes[dimension_index].n_points - 1);
-    auto closest_indices = get_closest_indices<order>(
-        normalized_coordinates, axes[dimension_index].n_points);
-    // notice this value is defined in [-1, 1]
-    auto normalized_value =
-        -1 + (2 * (normalized_coordinates - closest_indices[0]) /
-              (closest_indices[order - 1] - closest_indices[0]));
     auto this_do_derivative = do_derivative[dimension_index];
+    auto this_do_periodic = do_periodic[dimension_index];
+
+    auto closest_indices =
+        this_do_periodic
+            ? get_closest_indices_periodic<order>(
+                  normalized_coordinates, axes[dimension_index].n_points)
+            : get_closest_indices<order>(normalized_coordinates,
+                                         axes[dimension_index].n_points);
+
+    // notice this value is defined in [-1, 1]
+    double normalized_value{};
+    if (!this_do_periodic)
+      normalized_value =
+          -1 + (2 * (normalized_coordinates - closest_indices[0]) /
+                (closest_indices[order - 1] - closest_indices[0]));
+    else {
+      // auto pos_of_0 =
+      //     std::find(closest_indices.begin(), closest_indices.end(), 0);
+      // if (pos_of_0 == closest_indices.end() ||
+      //     pos_of_0 == closest_indices.begin()) { // did not across boundary
+      //   normalized_value =
+      //       -1 + (2 * (normalized_coordinates - closest_indices[0]) /
+      //             (closest_indices[order - 1] - closest_indices[0]));
+      // } else {
+      //   auto coord_of_0 =
+      //       -1 + ((double)(std::distance(closest_indices.begin(), pos_of_0))
+      //       /
+      //             (order - 1) * 2.0);
+      //   bool normalized_coordinates_pass_center =
+      //       normalized_coordinates > (axes[dimension_index].n_points - 1)
+      //       / 2.;
+      //   auto rel_coord_of_0 = normalized_coordinates_pass_center
+      //                             ? (axes[dimension_index].n_points - 1)
+      //                             : 0;
+      //   normalized_value =
+      //       coord_of_0 +
+      //       (normalized_coordinates - rel_coord_of_0) * 2. / (order - 1);
+      // }
+      auto center_in_big_coord = order % 2 == 0 ? 0.5 : 1;
+      auto shift_in_big_coord = normalized_coordinates - center_in_big_coord;
+      shift_in_big_coord -= std::round(shift_in_big_coord);
+      normalized_value = shift_in_big_coord * 2 / (order - 1);
+    }
+
     std::array<size_t, dimension_index + 1> new_coord{};
     for (size_t i = 0; i < dimension_index; ++i) {
       new_coord[i] = index[i];
     }
     if constexpr (dimension_index == dimension - 1) {
       std::array<double, order> sub_grids;
+      double CDF_shift = 0;
       for (size_t i = 0; i < order; ++i) {
         new_coord[dimension_index] = closest_indices[i];
         sub_grids[i] = (*this)[new_coord];
+        if (this_do_derivative && this_do_periodic) {
+          // in case from order - 2 to 0
+          if (i > 0 && closest_indices[i] == 0 &&
+              closest_indices[i - 1] == axes[dimension_index].n_points - 2) {
+            new_coord[dimension_index] = axes[dimension_index].n_points - 1;
+            CDF_shift = (*this)[new_coord];
+          }
+          sub_grids[i] += CDF_shift;
+        }
       }
       return std::make_tuple(sub_grids, this_do_derivative, normalized_value);
     } else {
       using sub_grid_type =
-          decltype(build_grid(coordinates, do_derivative,
+          decltype(build_grid(coordinates, do_derivative, do_periodic,
                               std::array<size_t, dimension_index + 1>{}));
       std::array<sub_grid_type, order> ret{};
+      sub_grid_type CDF_shift;
       for (size_t i = 0; i < order; ++i) {
         new_coord[dimension_index] = closest_indices[i];
-        ret[i] = build_grid(coordinates, do_derivative, new_coord);
+        ret[i] = build_grid(coordinates, do_derivative, do_periodic, new_coord);
+        if (this_do_derivative && this_do_periodic) {
+          // in case from order - 2 to 0
+          if (i > 0 && closest_indices[i] == 0 &&
+              closest_indices[i - 1] == axes[dimension_index].n_points - 2) {
+            new_coord[dimension_index] = axes[dimension_index].n_points - 1;
+            CDF_shift =
+                build_grid(coordinates, do_derivative, do_periodic, new_coord);
+          }
+          add_grid(ret[i], CDF_shift);
+        }
       }
       return std::make_tuple(ret, this_do_derivative, normalized_value);
     }
@@ -193,6 +269,24 @@ private:
 
     for (auto &i : ret) {
       i += shift;
+    }
+    return ret;
+  }
+
+  template <size_t order>
+  static std::array<size_t, order>
+  get_closest_indices_periodic(double this_index_d, size_t n_points) {
+    std::array<size_t, order> ret{};
+    std::iota(ret.begin(), ret.end(), 0);
+    auto mid = (order - 1) / 2.0;
+    int shift = std::round(this_index_d - mid);
+    auto n_points_used = n_points - 1;
+    for (auto &i : ret) {
+      if (shift < 0) {
+        i = (i + shift + n_points_used) % n_points_used;
+      } else {
+        i = (i + shift) % n_points_used;
+      }
     }
     return ret;
   }
