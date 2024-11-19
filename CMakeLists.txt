@@ -7,7 +7,9 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 # Find packages
 find_package(ROOT REQUIRED)
 find_package(Eigen3 REQUIRED)
-find_package(Boost REQUIRED COMPONENTS program_options)
+# find_package(Boost REQUIRED COMPONENTS program_options)
+find_package(Boost REQUIRED COMPONENTS program_options python)
+find_package(Python3 COMPONENTS Interpreter Development REQUIRED)
 
 # Include directories
 include_directories(${CMAKE_SOURCE_DIR}/include)
@@ -29,3 +31,12 @@ target_link_libraries(interpolation PRIVATE ROOT::Core ROOT::Hist ROOT::Gpad Eig
 target_link_libraries(honda_flux_handling PRIVATE Boost::program_options toy_interpolation_objects ROOT::Core ROOT::Hist ROOT::Gpad Eigen3::Eigen)
 target_link_libraries(honda_flux_handling3D PRIVATE Boost::program_options toy_interpolation_objects ROOT::Core ROOT::Hist ROOT::Gpad Eigen3::Eigen)
 target_link_libraries(honda_flux_handling3D_spline PRIVATE Boost::program_options toy_interpolation_objects ROOT::Core ROOT::Hist ROOT::Gpad Eigen3::Eigen)
+
+# Add shared library for Python interface
+add_library(hkkm_interpolation MODULE py_interface.cxx)
+
+# Link Boost.Python to the shared library
+target_link_libraries(hkkm_interpolation PRIVATE Boost::python Python3::Python toy_interpolation_objects Eigen3::Eigen ROOT::Core ROOT::Hist)
+
+# Set the output properties for the shared library
+set_target_properties(hkkm_interpolation PROPERTIES PREFIX "" SUFFIX ".so")
