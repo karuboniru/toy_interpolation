@@ -8,8 +8,12 @@ set(CMAKE_POSITION_INDEPENDENT_CODE ON)
 find_package(ROOT REQUIRED)
 find_package(Eigen3 REQUIRED)
 # find_package(Boost REQUIRED COMPONENTS program_options)
-find_package(Boost REQUIRED COMPONENTS program_options python)
+find_package(Boost REQUIRED COMPONENTS program_options python numpy3)
 find_package(Python3 COMPONENTS Interpreter Development REQUIRED)
+find_package(OpenMP)
+if(OpenMP_CXX_FOUND)
+  message(STATUS "Found OpenMP")
+endif()
 
 # Include directories
 include_directories(${CMAKE_SOURCE_DIR}/include)
@@ -36,7 +40,10 @@ target_link_libraries(honda_flux_handling3D_spline PRIVATE Boost::program_option
 add_library(hkkm_interpolation MODULE py_interface.cxx)
 
 # Link Boost.Python to the shared library
-target_link_libraries(hkkm_interpolation PRIVATE Boost::python Python3::Python toy_interpolation_objects Eigen3::Eigen ROOT::Core ROOT::Hist)
+target_link_libraries(hkkm_interpolation PRIVATE Boost::python Boost::numpy3 Python3::Python toy_interpolation_objects Eigen3::Eigen ROOT::Core ROOT::Hist)
+if(OpenMP_CXX_FOUND)
+  target_link_libraries(hkkm_interpolation PRIVATE OpenMP::OpenMP_CXX)
+endif()
 
 # Set the output properties for the shared library
 set_target_properties(hkkm_interpolation PROPERTIES PREFIX "" SUFFIX ".so")

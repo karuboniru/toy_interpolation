@@ -118,7 +118,7 @@ double spline_reader::get_cross_section(int neutrino_id, int target_id,
              .emplace(key, get_spline_sum(file.get(), channels, interaction))
              .first; // emplace returns a pair<iterator, bool>
   }
-  auto res =  it->second.do_interpolation({energy}, {false}, {false});
+  auto res = it->second.do_interpolation({energy}, {false}, {false});
   res = std::max(res, 0.);
   return res;
 }
