@@ -7,6 +7,10 @@
 #include <string>
 #include <tuple>
 
+#include "interpolation.hxx"
+
+using xsec_interpolater = interpolate<3>;
+
 class spline_reader {
 public:
   spline_reader(const char *filename);
@@ -24,6 +28,6 @@ private:
   std::shared_ptr<TFile> file;
   std::map<
       std::tuple<int, int, std::string> /* neutrino_id, target_id, channel */,
-      TF1>
+      xsec_interpolater>
       cross_section_objects;
 };

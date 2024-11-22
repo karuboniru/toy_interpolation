@@ -15,7 +15,7 @@ def func(E):
     xsec = f.get_cross_section(14, 1000060120, E, "tot_cc")
     return xsec / E
 
-x = np.linspace(0.1, 100, 300)
+x = np.linspace(0.1, 100, 3000)
 y = np.array([func(logE) for logE in x])
 
 plt.plot(x, y)

@@ -1,4 +1,5 @@
 #include "spline.hxx"
+#include "interpolation.hxx"
 
 #include <TDatabasePDG.h>
 #include <TF1.h>
@@ -6,7 +7,10 @@
 #include <TGraph.h>
 #include <TSpline.h>
 
+#include <cassert>
 #include <iostream>
+#include <ostream>
+#include <print>
 #include <ranges>
 #include <string>
 
@@ -61,26 +65,30 @@ std::string get_neutrino_name(int id) {
   }
 }
 
-TF1 get_spline_sum(TFile *file, const std::vector<std::string> &channels,
-                   std::string interaction) {
-  return {
-      interaction.c_str(),
-      [spline_vec =
-           channels | std::views::transform([&](auto &&channel) {
-             // IIRC the TFile instance will still hold the ownership of those
-             //  TGraph objects, so no need to worry about memory leak.
-             return file->Get<TGraph>((interaction + "/" + channel).c_str());
-           }) |
-           std::views::filter([](auto &&graph) -> bool { return graph; }) |
-           std::views::transform(
-               [](auto &&graph) { return TSpline3{"", graph}; }) |
-           std::ranges::to<std::vector>()](const double *x, const double *) {
-        return std::ranges::fold_left(
-            spline_vec | std::views::transform(
-                             [&](auto &&spline) { return spline.Eval(x[0]); }),
-            0.0, std::plus<double>{});
-      },
-      min, max, 0};
+xsec_interpolater get_spline_sum(TFile *file,
+                                 const std::vector<std::string> &channels,
+                                 std::string interaction) {
+  auto spline_vec =
+      channels | std::views::transform([&](auto &&channel) {
+        // IIRC the TFile instance will still hold the ownership of those
+        //  TGraph objects, so no need to worry about memory leak.
+        return file->Get<TGraph>((interaction + "/" + channel).c_str());
+      }) |
+      std::views::filter([](auto &&graph) -> bool { return graph; }) |
+      std::ranges::to<std::vector>();
+  assert(!spline_vec.empty());
+  auto n_points = spline_vec.front()->GetN();
+  auto E_min = spline_vec.front()->GetX()[0];
+  auto E_max = spline_vec.front()->GetX()[n_points - 1];
+  axis_object energy_axis{
+      .min = E_min, .max = E_max, .n_points = (size_t)(n_points)};
+  xsec_interpolater ret{{energy_axis}};
+  for (auto &graph : spline_vec) {
+    for (size_t i = 0; i < n_points; ++i) {
+      ret[{i}] += graph->GetY()[i];
+    }
+  }
+  return ret;
 }
 } // namespace
 
@@ -110,5 +118,7 @@ double spline_reader::get_cross_section(int neutrino_id, int target_id,
              .emplace(key, get_spline_sum(file.get(), channels, interaction))
              .first; // emplace returns a pair<iterator, bool>
   }
-  return it->second.Eval(energy);
+  auto res =  it->second.do_interpolation({energy}, {false}, {false});
+  res = std::max(res, 0.);
+  return res;
 }
