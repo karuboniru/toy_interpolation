@@ -3,7 +3,7 @@ project(ToyInterpolation LANGUAGES CXX)
 
 set(CMAKE_CXX_STANDARD 23)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
-
+set(CMAKE_POSITION_INDEPENDENT_CODE ON)
 # Find packages
 find_package(ROOT REQUIRED)
 find_package(Eigen3 REQUIRED)
@@ -17,7 +17,7 @@ include_directories(${CMAKE_SOURCE_DIR}/include)
 # Compile every .cxx file in src/ into object files
 file(GLOB SRC_FILES ${CMAKE_SOURCE_DIR}/src/*.cxx)
 add_library(toy_interpolation_objects OBJECT ${SRC_FILES})
-# link_libraries(toy_interpolation_objects PUBLIC ROOT::Core ROOT::Hist ROOT::Gpad) 
+target_link_libraries(toy_interpolation_objects PUBLIC Eigen3::Eigen) 
 target_include_directories(toy_interpolation_objects PUBLIC ${CMAKE_SOURCE_DIR}/include ${ROOT_INCLUDE_DIRS})
 
 # Add executables

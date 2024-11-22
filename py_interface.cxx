@@ -1,6 +1,7 @@
 #include "hkkm_reader.hxx"
 #include "hkkm_reader_3D.hxx"
 #include "interpolation.hxx"
+#include "spline.hxx"
 
 #include <array>
 #include <boost/python.hpp>
@@ -14,9 +15,12 @@ constexpr size_t n_costh_points = n_costh_bins + 1;
 constexpr size_t n_phi_bins = 12;
 constexpr size_t n_phi_points = n_phi_bins + 1;
 
-axis_object logE_points{.min = -1, .max = 4, .n_points = n_logE_points};
-axis_object costh_points{.min = -1, .max = 1, .n_points = n_costh_points};
-axis_object phi_points{.min = 0, .max = M_PI * 2, .n_points = n_phi_points};
+constexpr axis_object logE_points{
+    .min = -1, .max = 4, .n_points = n_logE_points};
+constexpr axis_object costh_points{
+    .min = -1, .max = 1, .n_points = n_costh_points};
+constexpr axis_object phi_points{
+    .min = 0, .max = M_PI * 2, .n_points = n_phi_points};
 
 size_t pdg2idx(int pdg) {
   switch (pdg) {
@@ -56,6 +60,7 @@ public:
     return interp[pdg2idx(pdg)].do_interpolation({logE, costh}, {false, true});
   }
 
+private:
   std::array<interpolate<3, 4>, 4> interp{
       interpolate<3, 4>{{logE_points, costh_points}},
       interpolate<3, 4>{{logE_points, costh_points}},
@@ -94,7 +99,8 @@ public:
     return interp[pdg2idx(pdg)].do_interpolation(
         {logE, costh, phi}, {false, true, true}, {false, false, true});
   }
-  // HKKM_READER_3D reader;
+
+private:
   std::array<interpolate<3, 4, 4>, 4> interp{
       interpolate<3, 4, 4>{{logE_points, costh_points, phi_points}},
       interpolate<3, 4, 4>{{logE_points, costh_points, phi_points}},
@@ -108,4 +114,7 @@ BOOST_PYTHON_MODULE(hkkm_interpolation) {
       .def("get_flux", &hkkm_2d::get_flux);
   boost::python::class_<hkkm_3d>("hkkm_3d", boost::python::init<const char *>())
       .def("get_flux", &hkkm_3d::get_flux);
+  boost::python::class_<spline_reader>("genie_spline",
+                                       boost::python::init<const char *>())
+      .def("get_cross_section", &spline_reader::get_cross_section);
 }
