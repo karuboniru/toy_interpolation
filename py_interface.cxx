@@ -5,6 +5,7 @@
 
 #include <TSystem.h>
 
+#include <algorithm>
 #include <boost/python.hpp>
 #include <boost/python/init.hpp>
 #include <boost/python/numpy.hpp>
@@ -16,8 +17,40 @@
 #include <format>
 #include <ostream>
 #include <print>
+#include <span>
 
 namespace np = boost::python::numpy;
+
+template <typename T> class np_linear_adapter {
+public:
+  np_linear_adapter(const np::ndarray &array_)
+      : nd(array_.get_nd()), shape(array_.get_shape(), nd),
+        strides(array_.get_strides(), nd), size(1),
+        data(reinterpret_cast<T *>(array_.get_data())) {
+    for (size_t i = 0; i < nd; ++i) {
+      size *= shape[i];
+    }
+  }
+
+  [[nodiscard]] T &operator[](size_t flat_index) const {
+    size_t offset = 0;
+    for (size_t i = 0; i < nd; ++i) {
+      auto this_index = flat_index % shape[i];
+      flat_index /= shape[i];
+      offset += this_index * (strides[i] / sizeof(T));
+    }
+    return data[offset];
+  }
+
+  [[nodiscard]] size_t get_size() const { return size; }
+
+private:
+  size_t nd{};
+  std::span<const long> shape;
+  std::span<const long> strides;
+  size_t size{};
+  T *data{};
+};
 
 namespace {
 const bool initializer = []() {
@@ -86,15 +119,24 @@ public:
     auto shape = E.get_shape();
     auto dimension = E.get_nd();
     auto result = np::empty(dimension, shape, np::dtype::get_builtin<double>());
-    auto E_data = reinterpret_cast<double *>(E.get_data());
-    auto costh_data = reinterpret_cast<double *>(costh.get_data());
-    auto result_data = reinterpret_cast<double *>(result.get_data());
-    auto size = shape[0];
-    for (auto nd = 1; nd < dimension; ++nd) {
-      size *= shape[nd];
-    }
+    // auto E_data = reinterpret_cast<double *>(E.get_data());
+    // auto costh_data = reinterpret_cast<double *>(costh.get_data());
+    // auto result_data = reinterpret_cast<double *>(result.get_data());
+    // auto size = shape[0];
+    // if (dimension > 1) {
+    //   throw std::invalid_argument("Only 1D array is supported");
+    // }
+    // auto stride_E = E.get_strides()[0] / sizeof(double);
+    // auto stride_costh = costh.get_strides()[0] / sizeof(double);
+    auto E_data = np_linear_adapter<double>(E);
+    auto costh_data = np_linear_adapter<double>(costh);
+    auto result_data = np_linear_adapter<double>(result);
+    auto size = E_data.get_size();
+
 #pragma omp parallel for schedule(dynamic)
     for (size_t i = 0; i < size; ++i) {
+      // result_data[i] =
+      //     get_flux(E_data[i * stride_E], costh_data[i * stride_costh], pdg);
       result_data[i] = get_flux(E_data[i], costh_data[i], pdg);
     }
     return result;
@@ -153,12 +195,18 @@ public:
     auto phi_data = reinterpret_cast<double *>(phi.get_data());
     auto result_data = reinterpret_cast<double *>(result.get_data());
     auto size = shape[0];
-    for (auto nd = 1; nd < dimension; ++nd) {
-      size *= shape[nd];
+    if (dimension > 1) {
+      throw std::invalid_argument("Only 1D array is supported");
     }
+    auto stride_E = E.get_strides()[0] / sizeof(double);
+    auto stride_costh = costh.get_strides()[0] / sizeof(double);
+    auto stride_phi = phi.get_strides()[0] / sizeof(double);
+
 #pragma omp parallel for schedule(dynamic)
     for (size_t i = 0; i < size; ++i) {
-      result_data[i] = get_flux(E_data[i], costh_data[i], phi_data[i], pdg);
+      result_data[i] =
+          get_flux(E_data[i * stride_E], costh_data[i * stride_costh],
+                   phi_data[i * stride_phi], pdg);
     }
     return result;
   }
@@ -180,13 +228,10 @@ public:
     auto shape = energy.get_shape();
     auto dimension = energy.get_nd();
     auto result = np::empty(dimension, shape, np::dtype::get_builtin<double>());
-    auto energy_data = reinterpret_cast<double *>(energy.get_data());
-    auto result_data = reinterpret_cast<double *>(result.get_data());
-    auto size = shape[0];
-    for (auto nd = 1; nd < dimension; ++nd) {
-      size *= shape[nd];
-    }
-    // just trigger the cache to avoid multithreading issue
+    auto energy_data = np_linear_adapter<double>(energy);
+
+    auto result_data = np_linear_adapter<double>(result);
+    auto size = energy_data.get_size();
     result_data[0] = spline_reader::get_cross_section(
         neutrino_id, target_id, energy_data[0], channel_name);
 #pragma omp parallel for schedule(dynamic)
@@ -197,6 +242,40 @@ public:
     return result;
   }
 };
+
+class hkkm_2d_raw : public HKKM_READER_2D {
+public:
+  using HKKM_READER_2D::HKKM_READER_2D;
+  double get_flux(double E, double costh, int pdg) {
+    auto logE = std::log10(E);
+    auto &hist = operator[](pdg);
+    auto Ebin = hist.GetXaxis()->FindBin(logE);
+    Ebin = std::max(Ebin, 1);
+    Ebin = std::min(Ebin, hist.GetNbinsX());
+    auto costhbin = hist.GetYaxis()->FindBin(costh);
+    costhbin = std::max(costhbin, 1);
+    costhbin = std::min(costhbin, hist.GetNbinsY());
+    return hist.GetBinContent(Ebin, costhbin);
+  }
+
+  np::ndarray get_flux(const np::ndarray &E, const np::ndarray &costh,
+                       int pdg) {
+    namespace np = np;
+    auto shape = E.get_shape();
+    auto dimension = E.get_nd();
+    auto result = np::empty(dimension, shape, np::dtype::get_builtin<double>());
+    auto E_data = np_linear_adapter<double>(E);
+    auto costh_data = np_linear_adapter<double>(costh);
+    auto result_data = np_linear_adapter<double>(result);
+    auto size = E_data.get_size();
+#pragma omp parallel for schedule(dynamic)
+    for (size_t i = 0; i < size; ++i) {
+      result_data[i] = get_flux(E_data[i], costh_data[i], pdg);
+    }
+    return result;
+  }
+};
+
 } // namespace
 
 BOOST_PYTHON_MODULE(hkkm_interpolation) {
@@ -222,4 +301,13 @@ BOOST_PYTHON_MODULE(hkkm_interpolation) {
                                           boost::python::init<const char *>())
       .def("get_cross_section", &spline_reader::get_cross_section)
       .def("get_cross_section", &spline_reader_py::get_cross_section);
+
+  boost::python::class_<hkkm_2d_raw>("hkkm_2d_raw",
+                                     boost::python::init<const char *>())
+      .def("get_flux",
+           static_cast<double (hkkm_2d_raw::*)(double, double, int)>(
+               &hkkm_2d_raw::get_flux))
+      .def("get_flux", static_cast<np::ndarray (hkkm_2d_raw::*)(
+                           const np::ndarray &, const np::ndarray &, int)>(
+                           &hkkm_2d_raw::get_flux));
 }
