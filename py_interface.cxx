@@ -27,6 +27,9 @@ public:
       : nd(array_.get_nd()), shape(array_.get_shape(), nd),
         strides(array_.get_strides(), nd), size(1),
         data(reinterpret_cast<T *>(array_.get_data())) {
+    if (array_.get_dtype() != np::dtype::get_builtin<T>()) [[unlikely]] {
+      throw std::invalid_argument("Invalid data type");
+    }
     for (size_t i = 0; i < nd; ++i) {
       size *= shape[i];
     }
@@ -37,9 +40,9 @@ public:
     for (size_t i = 0; i < nd; ++i) {
       auto this_index = flat_index % shape[i];
       flat_index /= shape[i];
-      offset += this_index * (strides[i] / sizeof(T));
+      offset += this_index * strides[i];
     }
-    return data[offset];
+    return data[offset / sizeof(T)];
   }
 
   [[nodiscard]] size_t get_size() const { return size; }
