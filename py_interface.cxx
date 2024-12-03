@@ -56,15 +56,6 @@ private:
 };
 
 namespace {
-const bool initializer = []() {
-  Py_Initialize();
-  np::initialize();
-  gSystem->ResetSignal(kSigBus);
-  gSystem->ResetSignal(kSigSegmentationViolation);
-  gSystem->ResetSignal(kSigIllegalInstruction);
-  return true;
-}();
-
 constexpr size_t n_logE_points = 101;
 constexpr size_t n_costh_bins = 20;
 constexpr size_t n_costh_points = n_costh_bins + 1;
@@ -122,15 +113,6 @@ public:
     auto shape = E.get_shape();
     auto dimension = E.get_nd();
     auto result = np::empty(dimension, shape, np::dtype::get_builtin<double>());
-    // auto E_data = reinterpret_cast<double *>(E.get_data());
-    // auto costh_data = reinterpret_cast<double *>(costh.get_data());
-    // auto result_data = reinterpret_cast<double *>(result.get_data());
-    // auto size = shape[0];
-    // if (dimension > 1) {
-    //   throw std::invalid_argument("Only 1D array is supported");
-    // }
-    // auto stride_E = E.get_strides()[0] / sizeof(double);
-    // auto stride_costh = costh.get_strides()[0] / sizeof(double);
     auto E_data = np_linear_adapter<double>(E);
     auto costh_data = np_linear_adapter<double>(costh);
     auto result_data = np_linear_adapter<double>(result);
@@ -282,6 +264,12 @@ public:
 } // namespace
 
 BOOST_PYTHON_MODULE(hkkm_interpolation) {
+  Py_Initialize();
+  np::initialize();
+  gSystem->ResetSignal(kSigBus);
+  gSystem->ResetSignal(kSigSegmentationViolation);
+  gSystem->ResetSignal(kSigIllegalInstruction);
+
   boost::python::class_<hkkm_2d>("hkkm_2d", boost::python::init<const char *>())
       .def("get_flux",
            static_cast<double (hkkm_2d::*)(double, double, int) const>(
